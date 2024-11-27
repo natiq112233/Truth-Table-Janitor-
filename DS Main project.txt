@@ -1,0 +1,245 @@
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.*;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+class LogicalOperations {
+    public boolean AND(boolean a, boolean b) {
+        return a && b;
+    }
+
+    public boolean OR(boolean a, boolean b) {
+        return a || b;
+    }
+
+    public boolean NOT(boolean a) {
+        return !a;
+    }
+
+    public boolean XOR(boolean a, boolean b) {
+        return a ^ b;
+    }
+
+    public boolean IMPLIES(boolean a, boolean b) {
+        return !a || b;
+    }
+
+    public boolean BICONDITIONAL(boolean a, boolean b) {
+        return a == b;
+    }
+}
+
+    class TruthTableGeneratorGUI extends JFrame {
+    private LogicalOperations operations = new LogicalOperations();
+    private JTextField equationInputField;
+    private JTable truthTable;
+    private DefaultTableModel tableModel;
+
+    public TruthTableGeneratorGUI() {
+        setTitle("Truth Table Generator");
+        setSize(900, 600);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        JPanel topPanel = new JPanel(new FlowLayout());
+        JLabel equationLabel = new JLabel("Enter Boolean Equation:");
+        equationInputField = new JTextField(30);
+        JButton generateButton = new JButton("Generate Truth Table");
+        JButton clearButton = new JButton("Clear Table");
+
+        topPanel.add(equationLabel);
+        topPanel.add(equationInputField);
+        topPanel.add(generateButton);
+        topPanel.add(clearButton);
+        add(topPanel, BorderLayout.NORTH);
+
+        tableModel = new DefaultTableModel();
+        truthTable = new JTable(tableModel);
+        JScrollPane tableScrollPane = new JScrollPane(truthTable);
+        add(tableScrollPane, BorderLayout.CENTER);
+
+        generateButton.addActionListener(new GenerateEquationListener());
+        clearButton.addActionListener(e -> clearTable());
+    }
+
+    private class GenerateEquationListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            String equation = equationInputField.getText().trim();
+            if (equation.isEmpty()) {
+                JOptionPane.showMessageDialog(TruthTableGeneratorGUI.this, "Please enter a valid equation.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            generateTruthTableForEquation(equation);
+        }
+    }
+
+    private void generateTruthTableForEquation(String equation) {
+        clearTable();
+
+        try {
+            Set<String> variables = extractVariables(equation);
+            List<String> variableList = new ArrayList<>(variables);
+            
+            String[] headers = new String[variableList.size() + 1];
+            System.arraycopy(variableList.toArray(), 0, headers, 0, variableList.size());
+            headers[variableList.size()] = "Result";
+            setupTableHeader(headers);
+            
+            int numVariables = variableList.size();
+            for (int i = 0; i < (1 << numVariables); i++) {
+                Map<String, Boolean> values = new HashMap<>();
+                for (int j = 0; j < numVariables; j++) {
+                    values.put(variableList.get(j), (i & (1 << j)) != 0);
+                }
+                
+                String parsedEquation = replaceVariables(equation, values);
+                
+                boolean result = evaluate(parsedEquation);
+                
+                Object[] row = new Object[numVariables + 1];
+                for (int j = 0; j < numVariables; j++) {
+                    row[j] = values.get(variableList.get(j)) ? "True" : "False";
+                }
+                row[numVariables] = result ? "True" : "False";
+                tableModel.addRow(row);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(), "Evaluation Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private Set<String> extractVariables(String equation) {
+        Set<String> variables = new LinkedHashSet<>();
+        Matcher matcher = Pattern.compile("\\b[a-zA-Z]\\b").matcher(equation);
+        while (matcher.find()) {
+            variables.add(matcher.group());
+        }
+        return variables;
+    }
+
+    private String replaceVariables(String equation, Map<String, Boolean> values) {
+        String parsedEquation = equation;
+        for (Map.Entry<String, Boolean> entry : values.entrySet()) {
+            parsedEquation = parsedEquation.replaceAll("\\b" + entry.getKey() + "\\b", entry.getValue().toString());
+        }
+        return parsedEquation;
+    }
+
+    private boolean evaluate(String expression) {
+        List<String> tokens = tokenize(expression);
+        List<String> postfix = toPostfix(tokens);
+        return evaluatePostfix(postfix);
+    }
+
+    private List<String> tokenize(String expression) {
+        List<String> tokens = new ArrayList<>();
+        Pattern pattern = Pattern.compile("[a-zA-Z]+|\\(|\\)|¬|∧|∨|⊕|→|↔");
+        Matcher matcher = pattern.matcher(expression);
+        while (matcher.find()) {
+            tokens.add(matcher.group());
+        }
+        return tokens;
+    }
+
+    private List<String> toPostfix(List<String> tokens) {
+        Map<String, Integer> precedence = Map.of(
+                "¬", 4,
+                "∧", 3,
+                "∨", 2,
+                "⊕", 2,
+                "→", 1,
+                "↔", 1
+        );
+        Stack<String> operatorStack = new Stack<>();
+        List<String> output = new ArrayList<>();
+
+        for (String token : tokens) {
+            if (token.matches("[a-zA-Z]+|true|false")) {
+                output.add(token);
+            } else if (token.equals("(")) {
+                operatorStack.push(token);
+            } else if (token.equals(")")) {
+                while (!operatorStack.isEmpty() && !operatorStack.peek().equals("(")) {
+                    output.add(operatorStack.pop());
+                }
+                operatorStack.pop();
+            } else {
+                while (!operatorStack.isEmpty() &&
+                        precedence.getOrDefault(operatorStack.peek(), 0) >= precedence.getOrDefault(token, 0)) {
+                    output.add(operatorStack.pop());
+                }
+                operatorStack.push(token);
+            }
+        }
+
+        while (!operatorStack.isEmpty()) {
+            output.add(operatorStack.pop());
+        }
+        return output;
+    }
+
+    private boolean evaluatePostfix(List<String> postfix) {
+        Stack<Boolean> stack = new Stack<>();
+
+        for (String token : postfix) {
+            if (token.equals("true")) {
+                stack.push(true);
+            } else if (token.equals("false")) {
+                stack.push(false);
+            } else {
+                switch (token) {
+                    case "¬":
+                        stack.push(!stack.pop());
+                        break;
+                    case "∧":
+                        stack.push(stack.pop() && stack.pop());
+                        break;
+                    case "∨":
+                        stack.push(stack.pop() || stack.pop());
+                        break;
+                    case "⊕":
+                        stack.push(stack.pop() ^ stack.pop());
+                        break;
+                    case "→":
+                        boolean b = stack.pop();
+                        boolean a = stack.pop();
+                        stack.push(!a || b);
+                        break;
+                    case "↔":
+                        boolean d = stack.pop();
+                        boolean c = stack.pop();
+                        stack.push(c == d);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown operator: " + token);
+                }
+            }
+        }
+        return stack.pop();
+    }
+
+    private void setupTableHeader(String... headers) {
+        tableModel.setColumnCount(0);
+        for (String header : headers) {
+            tableModel.addColumn(header);
+        }
+    }
+
+    private void clearTable() {
+        tableModel.setRowCount(0);
+        tableModel.setColumnCount(0);
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            TruthTableGeneratorGUI frame = new TruthTableGeneratorGUI();
+            frame.setVisible(true);
+        });
+    }
+}
