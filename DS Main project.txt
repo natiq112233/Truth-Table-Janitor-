@@ -235,7 +235,7 @@ class LogicalOperations {
         tableModel.setRowCount(0);
         tableModel.setColumnCount(0);
     }
-
+    //..Main body
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             TruthTableGeneratorGUI frame = new TruthTableGeneratorGUI();
